@@ -1,0 +1,28 @@
+app:
+  env:
+  port:
+  version:
+
+database_erp:
+  dbhost:
+  dbport:
+  username:
+  password:
+  dbname:
+
+database_dpi:
+  dbhost:
+  dbport:
+  username:
+  password:
+  dbname:
+
+file:
+  host:
+  port:
+  key:
+  bucket:
+
+jwt:
+  access_token:
+  refresh_token:

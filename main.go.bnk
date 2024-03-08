@@ -1,0 +1,104 @@
+package main
+
+import (
+	"GetDataOdoo/config"
+	"GetDataOdoo/database"
+	"GetDataOdoo/repositories"
+	"GetDataOdoo/routes"
+	"GetDataOdoo/services"
+	"fmt"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/helmet"
+	"github.com/gofiber/fiber/v2/middleware/logger"
+	"log"
+	"time"
+)
+
+func getRunningTime() int {
+	// Fetch the running time dynamically, e.g., from a database or configuration// Fetch the running time dynamically, e.g., from a database or configuration
+	running, err := repositories.GetTimeToRun()
+	if err != nil {
+		fmt.Println("error : ", err)
+	}
+
+	return running.Running
+
+}
+
+func getRunningStatus() int {
+	// Fetch the running time dynamically, e.g., from a database or configuration// Fetch the running time dynamically, e.g., from a database or configuration
+	running, err := repositories.GetStatusRunning()
+	if err != nil {
+		fmt.Println("error : ", err)
+	}
+	return running.StopRun
+}
+
+func main() {
+
+	app := fiber.New()
+	app.Use(helmet.New())
+	app.Use(logger.New())
+	app.Use(cors.New())
+
+	AppPort := config.GetEnv("app.port", "")
+
+	database.DatabaseConnection()
+	database.DatabaseConnectionERP()
+	database.DatabaseServiceConnection()
+	repositories.GetEnvData()
+
+	routes.Setup(app)
+
+	tm := services.NewTaskManager()
+
+	tm.Start()
+	thisTime := getRunningTime()
+	t := time.Now()
+
+	/* */
+	var status = getRunningStatus()
+	if status == 1 {
+		fmt.Println("first run add data")
+		repositories.AddDataToERP(0)
+	}
+	run := 0
+	_, _ = tm.AddTask("*/1 * * * * *", func() {
+		addTime := t.Add(time.Second * time.Duration(thisTime-1))
+		if time.Now().Compare(addTime) == 1 {
+			thisTime = getRunningTime()
+			t = time.Now()
+			var status = getRunningStatus()
+			if status == 1 {
+				fmt.Println("run add data")
+				repositories.AddDataToERP(0)
+				fmt.Println("set next time ", t.Add(time.Second*time.Duration(thisTime-1)))
+			} else {
+				if run == 0 {
+					repositories.GetEnvData()
+				}
+				run++
+			}
+		}
+	})
+	/* */
+
+	repositories.ReRunData()
+
+	/*log.Print("first run update data")*/
+	_, _ = tm.AddTask("*/1 * * * * *", func() {
+		addTime := t.Add(time.Second * time.Duration(thisTime-1))
+		if time.Now().Compare(addTime) == 1 {
+			thisTime = getRunningTime()
+			t = time.Now()
+			log.Print("run update data")
+			repositories.ReRunData()
+		}
+	})
+
+	log.Fatal(app.Listen(fmt.Sprintf(":%v", AppPort)))
+
+	select {}
+
+}
